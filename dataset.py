@@ -14,24 +14,20 @@ def rm_mkdir(dir_path):
     print('Create path - %s'%dir_path)
 
 def main(config):
-
+    
+#     import pdb; pdb.set_trace()
     rm_mkdir(config.train_path)
     rm_mkdir(config.train_GT_path)
     rm_mkdir(config.valid_path)
     rm_mkdir(config.valid_GT_path)
     rm_mkdir(config.test_path)
     rm_mkdir(config.test_GT_path)
-
-    filenames = os.listdir(config.origin_data_path)
-    data_list = []
-    GT_list = []
-
-    for filename in filenames:
-        ext = os.path.splitext(filename)[-1]
-        if ext =='.jpg':
-            filename = filename.split('_')[-1][:-len('.jpg')]
-            data_list.append('ISIC_'+filename+'.jpg')
-            GT_list.append('ISIC_'+filename+'_segmentation.png')
+    
+    # Get list of all masks
+    filenames = os.listdir(config.origin_GT_path)
+    
+    data_list = filenames
+    GT_list = filenames
 
     num_total = len(data_list)
     num_train = int((config.train_ratio/(config.train_ratio+config.valid_ratio+config.test_ratio))*num_total)
@@ -86,26 +82,32 @@ def main(config):
 
         printProgressBar(i + 1, num_test, prefix = 'Producing test set:', suffix = 'Complete', length = 50)
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
 
+class Arguments(object):
+    def __init__(self, dictionary):
+        """Constructor"""
+        for key in dictionary:
+            setattr(self, key, dictionary[key])
+
+
+# +
+config = {
+    'train_ratio': 0.8,
+    'valid_ratio': 0.1,
+    'test_ratio': 0.1,
+
+    # Origin data path
+    'origin_data_path': '/project/DSone/wa3mr/Unet_test/EE/',
+    'origin_GT_path': '/project/DSone/wa3mr/Unet_test/masks_500/',
     
-    # model hyper-parameters
-    parser.add_argument('--train_ratio', type=float, default=0.6)
-    parser.add_argument('--valid_ratio', type=float, default=0.2)
-    parser.add_argument('--test_ratio', type=float, default=0.2)
+    # To generate
+    'train_path': '/project/DSone/as3ek/image_segmentation/dataset/train/',
+    'train_GT_path': '/project/DSone/as3ek/image_segmentation/dataset/train_GT/',
+    'valid_path': '/project/DSone/as3ek/image_segmentation/dataset/valid/',
+    'valid_GT_path': '/project/DSone/as3ek/image_segmentation/dataset/valid_GT/',
+    'test_path': '/project/DSone/as3ek/image_segmentation/dataset/test/',
+    'test_GT_path': '/project/DSone/as3ek/image_segmentation/dataset/test_GT/',
+}
 
-    # data path
-    parser.add_argument('--origin_data_path', type=str, default='../ISIC/dataset/ISIC2018_Task1-2_Training_Input')
-    parser.add_argument('--origin_GT_path', type=str, default='../ISIC/dataset/ISIC2018_Task1_Training_GroundTruth')
-    
-    parser.add_argument('--train_path', type=str, default='./dataset/train/')
-    parser.add_argument('--train_GT_path', type=str, default='./dataset/train_GT/')
-    parser.add_argument('--valid_path', type=str, default='./dataset/valid/')
-    parser.add_argument('--valid_GT_path', type=str, default='./dataset/valid_GT/')
-    parser.add_argument('--test_path', type=str, default='./dataset/test/')
-    parser.add_argument('--test_GT_path', type=str, default='./dataset/test_GT/')
-
-    config = parser.parse_args()
-    print(config)
-    main(config)
+config = Arguments(config)
+main(config)

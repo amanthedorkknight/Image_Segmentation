@@ -63,39 +63,45 @@ def main(config):
         solver.test()
 
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-
-    
+# +
+class Arguments(object):
+    def __init__(self, dictionary):
+        """Constructor"""
+        for key in dictionary:
+            setattr(self, key, dictionary[key])
+            
+config = {
     # model hyper-parameters
-    parser.add_argument('--image_size', type=int, default=224)
-    parser.add_argument('--t', type=int, default=3, help='t for Recurrent step of R2U_Net or R2AttU_Net')
-    
-    # training hyper-parameters
-    parser.add_argument('--img_ch', type=int, default=3)
-    parser.add_argument('--output_ch', type=int, default=1)
-    parser.add_argument('--num_epochs', type=int, default=100)
-    parser.add_argument('--num_epochs_decay', type=int, default=70)
-    parser.add_argument('--batch_size', type=int, default=1)
-    parser.add_argument('--num_workers', type=int, default=8)
-    parser.add_argument('--lr', type=float, default=0.0002)
-    parser.add_argument('--beta1', type=float, default=0.5)        # momentum1 in Adam
-    parser.add_argument('--beta2', type=float, default=0.999)      # momentum2 in Adam    
-    parser.add_argument('--augmentation_prob', type=float, default=0.4)
+    'image_size': 500,
+    't': 3,
 
-    parser.add_argument('--log_step', type=int, default=2)
-    parser.add_argument('--val_step', type=int, default=2)
+    # training hyper-parameters
+    'img_ch': 3,
+    'output_ch': 1,
+    'num_epochs': 100,
+    'num_epochs_decay': 70,
+    'batch_size': 4,
+    'num_workers': 8,
+    'lr': 0.0001,
+    'beta1': 0.5,        # momentum1 in Adam
+    'beta2': 0.999,      # momentum2 in Adam    
+    'augmentation_prob': 0.4,
+
+    'log_step': 2,
+    'val_step': 2,
 
     # misc
-    parser.add_argument('--mode', type=str, default='train')
-    parser.add_argument('--model_type', type=str, default='U_Net', help='U_Net/R2U_Net/AttU_Net/R2AttU_Net')
-    parser.add_argument('--model_path', type=str, default='./models')
-    parser.add_argument('--train_path', type=str, default='./dataset/train/')
-    parser.add_argument('--valid_path', type=str, default='./dataset/valid/')
-    parser.add_argument('--test_path', type=str, default='./dataset/test/')
-    parser.add_argument('--result_path', type=str, default='./result/')
+    'mode': 'train',
+    'model_type': 'U_Net',
+    'model_path': '/project/DSone/as3ek/image_segmentation/models/',
+    'train_path': '/project/DSone/as3ek/image_segmentation/dataset/train/',
+    'valid_path': '/project/DSone/as3ek/image_segmentation/dataset/valid/',
+    'test_path': '/project/DSone/as3ek/image_segmentation/dataset/test/',
+    'result_path': '/project/DSone/as3ek/image_segmentation/result/',
+    'cuda_idx': 1
+}
+config = Arguments(config)
+main(config)
+# -
 
-    parser.add_argument('--cuda_idx', type=int, default=1)
 
-    config = parser.parse_args()
-    main(config)
