@@ -1,22 +1,32 @@
+# +
+# Basic imports
 import os
+import csv
 import numpy as np
 import time
 import datetime
+
+# DL imports
 import torch
 import torchvision
 from torch import optim
 from torch.autograd import Variable
 import torch.nn.functional as F
+
+# Reqd functions imports
 from evaluation import *
 from network import U_Net,R2U_Net,AttU_Net,R2AttU_Net
-import csv
+
+# Functional imports
 import kornia
 import hiddenlayer as hl
 
 
+# -
+
 class Solver(object):
     def __init__(self, config, train_loader, valid_loader, test_loader):
-
+        
         # Data loader
         self.train_loader = train_loader
         self.valid_loader = valid_loader
@@ -48,22 +58,23 @@ class Solver(object):
         self.dc_history = hl.History()
         self.canvas = hl.Canvas()
 
-        # Step size
+        # Step size for plotting
         self.log_step = config.log_step
         self.val_step = config.val_step
 
-        # Path
+        # Paths
         self.model_path = config.model_path
         self.result_path = config.result_path
         self.mode = config.mode
 
+        # Model training properties
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.model_type = config.model_type
         self.t = config.t
         self.build_model()
 
     def build_model(self):
-        """Build generator and discriminator."""
+        # Load required model
         if self.model_type =='U_Net':
             self.unet = U_Net(img_ch=3,output_ch=1)
         elif self.model_type =='R2U_Net':
@@ -72,14 +83,15 @@ class Solver(object):
             self.unet = AttU_Net(img_ch=3,output_ch=1)
         elif self.model_type == 'R2AttU_Net':
             self.unet = R2AttU_Net(img_ch=3,output_ch=1,t=self.t)
-            
-
+        
+        # Load optimizer
         self.optimizer = optim.Adam(list(self.unet.parameters()),
                                       self.lr, [self.beta1, self.beta2])
+        # Move model to device
         self.unet.to(self.device)
 
     def print_network(self, model, name):
-        """Print out the network information."""
+        # Print out the network information
         num_params = 0
         for p in model.parameters():
             num_params += p.numel()
@@ -87,43 +99,15 @@ class Solver(object):
         print(name)
         print("The number of parameters: {}".format(num_params))
 
-    def to_data(self, x):
-        """Convert variable to tensor."""
-        if torch.cuda.is_available():
-            x = x.cpu()
-        return x.data
-
-    def update_lr(self, g_lr, d_lr):
-        for param_group in self.optimizer.param_groups:
-            param_group['lr'] = lr
-
-    def reset_grad(self):
-        """Zero the gradient buffers."""
-        self.unet.zero_grad()
-
-    def compute_accuracy(self,SR,GT):
-        SR_flat = SR.view(-1)
-        GT_flat = GT.view(-1)
-
-        acc = GT_flat.data.cpu()==(SR_flat.data.cpu()>0.5)
-
-    def tensor2img(self,x):
-        img = (x[:,0,:,:]>x[:,1,:,:]).float()
-        img = img*255
-        return img
-
-
     def train(self):
-        """Train encoder, generator and discriminator."""
-
-        #====================================== Training ===========================================#
-        #===========================================================================================#
         
-        # Debugging
-        a = torch.zeros((4, 3, 224, 224))
-        self.unet(a.to(self.device))
+        # Debugging (Uncomment following lines)
+        # a = torch.zeros((4, 3, 224, 224))
+        # self.unet(a.to(self.device))
         
-        unet_path = os.path.join(self.model_path, '%s-%d-%.4f-%d-%.4f.pkl' %(self.model_type,self.num_epochs,self.lr,self.num_epochs_decay,self.augmentation_prob))
+        unet_path = os.path.join(self.model_path, '%s-%d-%.4f-%d-%.4f.pkl' %(self.model_type,self.num_epochs,\
+                                                                             self.lr,self.num_epochs_decay,\
+                                                                             self.augmentation_prob))
 
         # U-Net Train
         if os.path.isfile(unet_path):
