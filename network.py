@@ -26,31 +26,45 @@ def init_weights(net, init_type='normal', gain=0.02):
     print('initialize network with %s' % init_type)
     net.apply(init_func)
 
-class conv_block(nn.Module):
-    def __init__(self,ch_in,ch_out):
-        super(conv_block,self).__init__()
+class down_conv(nn.Module):
+    def __init__(self,ch_in,ch_out,k=4,s=2,p=1):
+        super(down_conv,self).__init__()
         self.conv = nn.Sequential(
-            nn.Conv2d(ch_in, ch_out, kernel_size=3,stride=1,padding=1,bias=True),
-            nn.BatchNorm2d(ch_out),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(ch_out, ch_out, kernel_size=3,stride=1,padding=1,bias=True),
+            nn.Conv2d(ch_in, ch_out, kernel_size=k,stride=s,padding=p,bias=True),
             nn.BatchNorm2d(ch_out),
             nn.ReLU(inplace=True)
         )
+        
+    def forward(self,x):
+        x = self.conv(x)
+        return x
 
 
+class conv_block(nn.Module):
+    def __init__(self,ch_in,ch_out,k=3,s=1,p=1):
+        super(conv_block,self).__init__()
+        self.conv = nn.Sequential(
+            nn.Conv2d(ch_in, ch_out, kernel_size=k,stride=s,padding=p,bias=True),
+            nn.BatchNorm2d(ch_out),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(ch_out, ch_out, kernel_size=k,stride=s,padding=p,bias=True),
+            nn.BatchNorm2d(ch_out),
+            nn.ReLU(inplace=True)
+        )
+        
     def forward(self,x):
         x = self.conv(x)
         return x
 
 class up_conv(nn.Module):
-    def __init__(self,ch_in,ch_out):
+    def __init__(self,ch_in,ch_out,k=4,s=2,p=1):
         super(up_conv,self).__init__()
         self.up = nn.Sequential(
-            nn.Upsample(scale_factor=2),
-            nn.Conv2d(ch_in,ch_out,kernel_size=3,stride=1,padding=1,bias=True),
-		    nn.BatchNorm2d(ch_out),
-			nn.ReLU(inplace=True)
+            nn.ConvTranspose2d(ch_in,ch_out,kernel_size=k,stride=s,padding=p,bias=True),
+#             nn.Upsample(scale_factor=2),
+#             nn.Conv2d(ch_in,ch_out,kernel_size=3,stride=1,padding=1,bias=True),
+            nn.BatchNorm2d(ch_out),
+            nn.ReLU(inplace=True)
         )
 
     def forward(self,x):
@@ -58,14 +72,14 @@ class up_conv(nn.Module):
         return x
 
 class Recurrent_block(nn.Module):
-    def __init__(self,ch_out,t=2):
+    def __init__(self,ch_out,t=2,k=3,s=1,p=1):
         super(Recurrent_block,self).__init__()
         self.t = t
         self.ch_out = ch_out
         self.conv = nn.Sequential(
-            nn.Conv2d(ch_out,ch_out,kernel_size=3,stride=1,padding=1,bias=True),
-		    nn.BatchNorm2d(ch_out),
-			nn.ReLU(inplace=True)
+            nn.Conv2d(ch_out,ch_out,kernel_size=k,stride=s,padding=p,bias=True),
+            nn.BatchNorm2d(ch_out),
+            nn.ReLU(inplace=True)
         )
 
     def forward(self,x):
@@ -76,7 +90,7 @@ class Recurrent_block(nn.Module):
             
             x1 = self.conv(x+x1)
         return x1
-        
+
 class RRCNN_block(nn.Module):
     def __init__(self,ch_in,ch_out,t=2):
         super(RRCNN_block,self).__init__()
@@ -93,10 +107,10 @@ class RRCNN_block(nn.Module):
 
 
 class single_conv(nn.Module):
-    def __init__(self,ch_in,ch_out):
+    def __init__(self,ch_in,ch_out,k=3,s=1,p=1):
         super(single_conv,self).__init__()
         self.conv = nn.Sequential(
-            nn.Conv2d(ch_in, ch_out, kernel_size=3,stride=1,padding=1,bias=True),
+            nn.Conv2d(ch_in, ch_out, kernel_size=k,stride=s,padding=p,bias=True),
             nn.BatchNorm2d(ch_out),
             nn.ReLU(inplace=True)
         )
@@ -146,7 +160,17 @@ class U_Net(nn.Module):
         self.Conv3 = conv_block(ch_in=128,ch_out=256)
         self.Conv4 = conv_block(ch_in=256,ch_out=512)
         self.Conv5 = conv_block(ch_in=512,ch_out=1024)
+        self.Conv6 = conv_block(ch_in=1024,ch_out=2048)
+        
+        self.DownConv1 = down_conv(ch_in=64, ch_out=64)
+        self.DownConv2 = down_conv(ch_in=128, ch_out=128)
+        self.DownConv3 = down_conv(ch_in=256, ch_out=256)
+        self.DownConv4 = down_conv(ch_in=512, ch_out=512)
+        self.DownConv5 = down_conv(ch_in=1024, ch_out=1024)
 
+        self.Up6 = up_conv(ch_in=2048,ch_out=1024)
+        self.Up_conv6 = conv_block(ch_in=2048, ch_out=1024)
+        
         self.Up5 = up_conv(ch_in=1024,ch_out=512)
         self.Up_conv5 = conv_block(ch_in=1024, ch_out=512)
 
@@ -166,22 +190,28 @@ class U_Net(nn.Module):
         # encoding path
         x1 = self.Conv1(x)
 
-        x2 = self.Maxpool(x1)
+        x2 = self.DownConv1(x1)
         x2 = self.Conv2(x2)
         
-        x3 = self.Maxpool(x2)
+        x3 = self.DownConv2(x2)
         x3 = self.Conv3(x3)
 
-        x4 = self.Maxpool(x3)
+        x4 = self.DownConv3(x3)
         x4 = self.Conv4(x4)
 
-        x5 = self.Maxpool(x4)
+        x5 = self.DownConv4(x4)
         x5 = self.Conv5(x5)
+        
+        x6 = self.DownConv5(x5)
+        x6 = self.Conv6(x6)
 
         # decoding + concat path
-        d5 = self.Up5(x5)
-        d5 = torch.cat((x4,d5),dim=1)
+        d6 = self.Up6(x6)
+        d6 = torch.cat((x5,d6),dim=1)
+        d6 = self.Up_conv6(d6)
         
+        d5 = self.Up5(d6)
+        d5 = torch.cat((x4,d5),dim=1)
         d5 = self.Up_conv5(d5)
         
         d4 = self.Up4(d5)
@@ -204,20 +234,17 @@ class U_Net(nn.Module):
 class R2U_Net(nn.Module):
     def __init__(self,img_ch=3,output_ch=1,t=2):
         super(R2U_Net,self).__init__()
-        
-        self.Maxpool = nn.MaxPool2d(kernel_size=2,stride=2)
-        self.Upsample = nn.Upsample(scale_factor=2)
 
         self.RRCNN1 = RRCNN_block(ch_in=img_ch,ch_out=64,t=t)
-
         self.RRCNN2 = RRCNN_block(ch_in=64,ch_out=128,t=t)
-        
         self.RRCNN3 = RRCNN_block(ch_in=128,ch_out=256,t=t)
-        
         self.RRCNN4 = RRCNN_block(ch_in=256,ch_out=512,t=t)
-        
         self.RRCNN5 = RRCNN_block(ch_in=512,ch_out=1024,t=t)
         
+        self.DownConv1 = down_conv(ch_in=64, ch_out=64)
+        self.DownConv2 = down_conv(ch_in=128, ch_out=128)
+        self.DownConv3 = down_conv(ch_in=256, ch_out=256)
+        self.DownConv4 = down_conv(ch_in=512, ch_out=512)
 
         self.Up5 = up_conv(ch_in=1024,ch_out=512)
         self.Up_RRCNN5 = RRCNN_block(ch_in=1024, ch_out=512,t=t)
@@ -238,16 +265,16 @@ class R2U_Net(nn.Module):
         # encoding path
         x1 = self.RRCNN1(x)
 
-        x2 = self.Maxpool(x1)
+        x2 = self.DownConv1(x1)
         x2 = self.RRCNN2(x2)
         
-        x3 = self.Maxpool(x2)
+        x3 = self.DownConv2(x2)
         x3 = self.RRCNN3(x3)
 
-        x4 = self.Maxpool(x3)
+        x4 = self.DownConv3(x3)
         x4 = self.RRCNN4(x4)
 
-        x5 = self.Maxpool(x4)
+        x5 = self.DownConv4(x4)
         x5 = self.RRCNN5(x5)
 
         # decoding + concat path
@@ -272,7 +299,6 @@ class R2U_Net(nn.Module):
         return d1
 
 
-
 class AttU_Net(nn.Module):
     def __init__(self,img_ch=3,output_ch=1):
         super(AttU_Net,self).__init__()
@@ -284,6 +310,11 @@ class AttU_Net(nn.Module):
         self.Conv3 = conv_block(ch_in=128,ch_out=256)
         self.Conv4 = conv_block(ch_in=256,ch_out=512)
         self.Conv5 = conv_block(ch_in=512,ch_out=1024)
+        
+        self.DownConv1 = down_conv(ch_in=64, ch_out=64)
+        self.DownConv2 = down_conv(ch_in=128, ch_out=128)
+        self.DownConv3 = down_conv(ch_in=256, ch_out=256)
+        self.DownConv4 = down_conv(ch_in=512, ch_out=512)
 
         self.Up5 = up_conv(ch_in=1024,ch_out=512)
         self.Att5 = Attention_block(F_g=512,F_l=512,F_int=256)
@@ -308,16 +339,16 @@ class AttU_Net(nn.Module):
         # encoding path
         x1 = self.Conv1(x)
 
-        x2 = self.Maxpool(x1)
+        x2 = self.DownConv1(x1)
         x2 = self.Conv2(x2)
         
-        x3 = self.Maxpool(x2)
+        x3 = self.DownConv2(x2)
         x3 = self.Conv3(x3)
 
-        x4 = self.Maxpool(x3)
+        x4 = self.DownConv3(x3)
         x4 = self.Conv4(x4)
 
-        x5 = self.Maxpool(x4)
+        x5 = self.DownConv4(x4)
         x5 = self.Conv5(x5)
 
         # decoding + concat path
@@ -349,20 +380,17 @@ class AttU_Net(nn.Module):
 class R2AttU_Net(nn.Module):
     def __init__(self,img_ch=3,output_ch=1,t=2):
         super(R2AttU_Net,self).__init__()
-        
-        self.Maxpool = nn.MaxPool2d(kernel_size=2,stride=2)
-        self.Upsample = nn.Upsample(scale_factor=2)
 
         self.RRCNN1 = RRCNN_block(ch_in=img_ch,ch_out=64,t=t)
-
         self.RRCNN2 = RRCNN_block(ch_in=64,ch_out=128,t=t)
-        
         self.RRCNN3 = RRCNN_block(ch_in=128,ch_out=256,t=t)
-        
         self.RRCNN4 = RRCNN_block(ch_in=256,ch_out=512,t=t)
-        
         self.RRCNN5 = RRCNN_block(ch_in=512,ch_out=1024,t=t)
         
+        self.DownConv1 = down_conv(ch_in=64, ch_out=64)
+        self.DownConv2 = down_conv(ch_in=128, ch_out=128)
+        self.DownConv3 = down_conv(ch_in=256, ch_out=256)
+        self.DownConv4 = down_conv(ch_in=512, ch_out=512)
 
         self.Up5 = up_conv(ch_in=1024,ch_out=512)
         self.Att5 = Attention_block(F_g=512,F_l=512,F_int=256)
@@ -387,16 +415,16 @@ class R2AttU_Net(nn.Module):
         # encoding path
         x1 = self.RRCNN1(x)
 
-        x2 = self.Maxpool(x1)
+        x2 = self.DownConv1(x1)
         x2 = self.RRCNN2(x2)
         
-        x3 = self.Maxpool(x2)
+        x3 = self.DownConv2(x2)
         x3 = self.RRCNN3(x3)
 
-        x4 = self.Maxpool(x3)
+        x4 = self.DownConv3(x3)
         x4 = self.RRCNN4(x4)
 
-        x5 = self.Maxpool(x4)
+        x5 = self.DownConv4(x4)
         x5 = self.RRCNN5(x5)
 
         # decoding + concat path

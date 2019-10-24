@@ -21,6 +21,33 @@ class ImageFolder(data.Dataset):
         self.RotationDegree = [0,90,180,270]
         self.augmentation_prob = augmentation_prob
         print("image count in {} path :{}".format(self.mode,len(self.image_paths)))
+        
+    def transform(self, image, mask, image_size=224, augmentation_prob=0.4):
+        
+        # Get a random crop of the given size
+        i, j, h, w = T.RandomCrop.get_params(
+            image, output_size=(image_size, image_size))
+        
+        image = F.crop(image, i, j, h, w)
+        mask = F.crop(mask, i, j, h, w)
+        
+        # Define and compose other transforms
+        Transforms = []
+#         Transforms.append(T.ColorJitter(0.2, 0.2, 0.2, 0.2))
+#         Transforms.append(T.RandomHorizontalFlip(augmentation_prob))
+#         Transforms.append(T.RandomVerticalFlip(augmentation_prob))
+        Transforms.append(T.ToTensor())
+        Transform = T.Compose(Transforms)
+        
+        # Apply to image and mask
+        image = Transform(image)
+        mask = Transform(mask)
+
+        # Normalize image
+        Norm_ = T.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+        image = Norm_(image)
+        
+        return image, mask
 
     def __getitem__(self, index):
         """Reads an image from a file and preprocesses it and returns."""
@@ -29,67 +56,16 @@ class ImageFolder(data.Dataset):
         filename = image_path.split('/')[-1]
         GT_path = self.GT_paths + filename
 
+        # Load image and mask as PIL images
         image = Image.open(image_path)
-        GT = Image.open(GT_path).convert('L')
-
-        aspect_ratio = image.size[1]/image.size[0]
-
-        Transform = []
-
-        ResizeRange = random.randint(300,320)
-        Transform.append(T.Resize((int(ResizeRange*aspect_ratio),ResizeRange)))
-        p_transform = random.random()
-
-        if (self.mode == 'train') and p_transform <= self.augmentation_prob:
-            RotationDegree = random.randint(0,3)
-            RotationDegree = self.RotationDegree[RotationDegree]
-            if (RotationDegree == 90) or (RotationDegree == 270):
-                aspect_ratio = 1/aspect_ratio
-
-            Transform.append(T.RandomRotation((RotationDegree,RotationDegree)))
-                        
-            RotationRange = random.randint(-10,10)
-            Transform.append(T.RandomRotation((RotationRange,RotationRange)))
-            CropRange = random.randint(250,270)
-            Transform.append(T.CenterCrop((int(CropRange*aspect_ratio),CropRange)))
-            Transform = T.Compose(Transform)
-            
-            image = Transform(image)
-            GT = Transform(GT)
-
-            ShiftRange_left = random.randint(0,20)
-            ShiftRange_upper = random.randint(0,20)
-            ShiftRange_right = image.size[0] - random.randint(0,20)
-            ShiftRange_lower = image.size[1] - random.randint(0,20)
-            image = image.crop(box=(ShiftRange_left,ShiftRange_upper,ShiftRange_right,ShiftRange_lower))
-            GT = GT.crop(box=(ShiftRange_left,ShiftRange_upper,ShiftRange_right,ShiftRange_lower))
-
-            if random.random() < 0.5:
-                image = F.hflip(image)
-                GT = F.hflip(GT)
-
-            if random.random() < 0.5:
-                image = F.vflip(image)
-                GT = F.vflip(GT)
-
-            Transform = T.ColorJitter(brightness=0.2,contrast=0.2,hue=0.02)
-
-            image = Transform(image)
-
-            Transform =[]
-
-
-        Transform.append(T.Resize((int(256*aspect_ratio)-int(256*aspect_ratio)%16,256)))
-        Transform.append(T.ToTensor())
-        Transform = T.Compose(Transform)
+        mask = Image.open(GT_path).convert('L')
         
-        image = Transform(image)
-        GT = Transform(GT)
+        # Call the transform function
+        image, mask = self.transform(image, mask, image_size=self.image_size,\
+                                     augmentation_prob=self.augmentation_prob)
+        
 
-        Norm_ = T.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
-        image = Norm_(image)
-
-        return image, GT
+        return image, mask
 
     def __len__(self):
         """Returns the total number of font files."""
@@ -105,4 +81,48 @@ def get_loader(image_path, image_size, batch_size, num_workers=2, mode='train',a
 								  num_workers=num_workers)
 	return data_loader
 
+if __name__ == '__main__':
+    class Arguments(object):
+        def __init__(self, dictionary):
+            """Constructor"""
+            for key in dictionary:
+                setattr(self, key, dictionary[key])
 
+        config = {
+            # model hyper-parameters
+            'image_size': 500,
+            't': 3,
+
+            # training hyper-parameters
+            'img_ch': 3,
+            'output_ch': 1,
+            'num_epochs': 100,
+            'num_epochs_decay': 70,
+            'batch_size': 4,
+            'num_workers': 8,
+            'lr': 0.0001,
+            'beta1': 0.5,        # momentum1 in Adam
+            'beta2': 0.999,      # momentum2 in Adam    
+            'augmentation_prob': 0.4,
+
+            'log_step': 2,
+            'val_step': 2,
+
+            # misc
+            'mode': 'train',
+            'model_type': 'U_Net',
+            'model_path': '/project/DSone/as3ek/image_segmentation/models/',
+            'train_path': '/project/DSone/as3ek/image_segmentation/dataset/train/',
+            'valid_path': '/project/DSone/as3ek/image_segmentation/dataset/valid/',
+            'test_path': '/project/DSone/as3ek/image_segmentation/dataset/test/',
+            'result_path': '/project/DSone/as3ek/image_segmentation/result/',
+            'cuda_idx': 1
+        }
+        config = Arguments(config)
+
+        train_loader = get_loader(image_path=config.train_path,
+                                    image_size=config.image_size,
+                                    batch_size=config.batch_size,
+                                    num_workers=config.num_workers,
+                                    mode='train',
+                                    augmentation_prob=config.augmentation_prob)
