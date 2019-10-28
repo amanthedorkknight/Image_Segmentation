@@ -38,7 +38,7 @@ class Solver(object):
         self.img_ch = config.img_ch
         self.output_ch = config.output_ch
         self.bce_loss = torch.nn.BCELoss()
-        self.dice_loss = kornia.losses.DiceLoss()
+        self.dice_loss = dice_loss()
         self.augmentation_prob = config.augmentation_prob
 
         # Hyper-parameters
@@ -51,6 +51,7 @@ class Solver(object):
         self.num_epochs = config.num_epochs
         self.num_epochs_decay = config.num_epochs_decay
         self.batch_size = config.batch_size
+        self.save_model = config.save_model
         
         # Plots
         self.loss_history = hl.History()
@@ -150,7 +151,7 @@ class Solver(object):
                     GT_flat = GT.view(GT.size(0),-1)
                     
                     # Compute loss
-                    loss = self.bce_loss(SR_flat,GT_flat) 
+                    loss = self.bce_loss(SR_flat,GT_flat) + self.lamda*self.dice_loss(SR_flat,GT_flat)
                     epoch_loss += loss.item()
                     
                     # Backprop
@@ -180,14 +181,6 @@ class Solver(object):
                 train_acc = acc
                 train_loss = epoch_loss/length
 
-                # Print the log info
-#                 print('Epoch [%d/%d], Loss: %.4f, \n[Training] Acc: %.4f, SE: %.4f, SP: %.4f, PC: %.4f, F1: %.4f, JS: %.4f, DC: %.4f' % (
-#                       epoch+1, self.num_epochs, \
-#                       epoch_loss,\
-#                       acc,SE,SP,PC,F1,JS,DC))
-
-            
-
 #                 # Decay learning rate
 #                 if (epoch+1) > (self.num_epochs - self.num_epochs_decay):
 #                     lr -= (self.lr / float(self.num_epochs_decay))
@@ -196,7 +189,7 @@ class Solver(object):
 #                     print ('Decay learning rate to lr: {}.'.format(lr))
                 
                 
-                #===================================== Validation ====================================#
+                # VALIDATION
                 with torch.no_grad():
                     epoch_loss = 0
                     self.unet.train(False)
@@ -221,7 +214,7 @@ class Solver(object):
                         GT_flat = GT.view(GT.size(0),-1)
 
                         # Compute loss
-                        loss = self.bce_loss(SR_flat,GT_flat)
+                        loss = self.bce_loss(SR_flat,GT_flat) + self.lamda*self.dice_loss(SR_flat,GT_flat)
                         epoch_loss += loss.item()
                         
                         acc += get_accuracy(SR,GT)
@@ -260,70 +253,66 @@ class Solver(object):
                         self.canvas.draw_plot([self.dc_history['train_dc'], self.dc_history['valid_dc']],
                                               labels=['Train Dice Coeff', 'Valid Dice Coeff'])
                     
-#                     print('[Validation] Acc: %.4f, SE: %.4f, SP: %.4f, PC: %.4f, F1: %.4f, JS: %.4f, DC: %.4f'%(acc,SE,SP,PC,F1,JS,DC))
-
-
                     grid_images = torch.cat([(images + 1)/2, torch.cat([SR, SR, SR], dim=1), torch.cat([GT, GT, GT], dim=1)])
                     grid = torchvision.utils.make_grid(grid_images, nrow=4)
                     torchvision.utils.save_image(grid, \
                                                   os.path.join(self.result_path,'%s_valid_%d_image.png'%\
                                                                (self.model_type,epoch+1)))
                     # Save Best U-Net model
-                    if unet_score > best_unet_score:
-                        best_unet_score = unet_score
-                        best_epoch = epoch
-                        best_unet = self.unet.state_dict()
-                        print('Best %s model score : %.4f'%(self.model_type,best_unet_score))
-                        torch.save(best_unet,unet_path)
-                        
-                    
-                        
-                
-                    
-            #===================================== Test ====================================#
-            del self.unet
-            del best_unet
-            self.build_model()
-            self.unet.load_state_dict(torch.load(unet_path))
-            
-            self.unet.train(False)
-            self.unet.eval()
+                    if self.save_model:
+                        if unet_score > best_unet_score:
+                            best_unet_score = unet_score
+                            best_epoch = epoch
+                            best_unet = self.unet.state_dict()
+                            print('Best %s model score : %.4f'%(self.model_type,best_unet_score))
+                            torch.save(best_unet,unet_path)
+                                            
+    def test(self):
+        del self.unet
+        del best_unet
+        self.build_model()
+        self.unet.load_state_dict(torch.load(unet_path))
 
-            acc = 0.    # Accuracy
-            SE = 0.        # Sensitivity (Recall)
-            SP = 0.        # Specificity
-            PC = 0.     # Precision
-            F1 = 0.        # F1 Score
-            JS = 0.        # Jaccard Similarity
-            DC = 0.        # Dice Coefficient
-            length=0
-            for i, (images, GT) in enumerate(self.valid_loader):
+        self.unet.train(False)
+        self.unet.eval()
 
-                images = images.to(self.device)
-                GT = GT.to(self.device)
+        acc = 0.    # Accuracy
+        SE = 0.        # Sensitivity (Recall)
+        SP = 0.        # Specificity
+        PC = 0.     # Precision
+        F1 = 0.        # F1 Score
+        JS = 0.        # Jaccard Similarity
+        DC = 0.        # Dice Coefficient
+        length=0
+        for i, (images, GT) in enumerate(self.valid_loader):
 
-                SR = torch.sigmoid(self.unet(images))
-                acc += get_accuracy(SR,GT)
-                SE += get_sensitivity(SR,GT)
-                SP += get_specificity(SR,GT)
-                PC += get_precision(SR,GT)
-                F1 += get_F1(SR,GT)
-                JS += get_JS(SR,GT)
-                DC += get_DC(SR,GT)
-                        
-                length += images.size(0)
-                    
-            acc = acc/length
-            SE = SE/length
-            SP = SP/length
-            PC = PC/length
-            F1 = F1/length
-            JS = JS/length
-            DC = DC/length
-            unet_score = JS + DC
+            images = images.to(self.device)
+            GT = GT.to(self.device)
+
+            SR = torch.sigmoid(self.unet(images))
+            acc += get_accuracy(SR,GT)
+            SE += get_sensitivity(SR,GT)
+            SP += get_specificity(SR,GT)
+            PC += get_precision(SR,GT)
+            F1 += get_F1(SR,GT)
+            JS += get_JS(SR,GT)
+            DC += get_DC(SR,GT)
+
+            length += images.size(0)
+
+        acc = acc/length
+        SE = SE/length
+        SP = SP/length
+        PC = PC/length
+        F1 = F1/length
+        JS = JS/length
+        DC = DC/length
+        unet_score = JS + DC
 
 
-            f = open(os.path.join(self.result_path,'result.csv'), 'a', encoding='utf-8', newline='')
-            wr = csv.writer(f)
-            wr.writerow([self.model_type,acc,SE,SP,PC,F1,JS,DC,self.lr,best_epoch,self.num_epochs,self.num_epochs_decay,self.augmentation_prob])
-            f.close()
+        f = open(os.path.join(self.result_path,'result.csv'), 'a', encoding='utf-8', newline='')
+        wr = csv.writer(f)
+        wr.writerow([self.model_type,acc,SE,SP,PC,F1,JS,DC,self.lr,best_epoch,self.num_epochs,self.num_epochs_decay,self.augmentation_prob])
+        f.close()
+
+

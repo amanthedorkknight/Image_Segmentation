@@ -4,6 +4,7 @@ from solver import Solver
 from data_loader import get_loader
 from torch.backends import cudnn
 import random
+import torch
 
 def main(config):
     cudnn.benchmark = True
@@ -87,10 +88,8 @@ config = {
     'valid_path': '/project/DSone/as3ek/image_segmentation/dataset/valid/',
     'test_path': '/project/DSone/as3ek/image_segmentation/dataset/test/',
     'result_path': '/project/DSone/as3ek/image_segmentation/result/',
-    'cuda_idx': 1
+    'cuda_idx': 1,
+    'save_model': False
 }
 config = Arguments(config)
 main(config)
-# -
-
-

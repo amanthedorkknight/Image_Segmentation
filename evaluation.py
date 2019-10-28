@@ -84,4 +84,12 @@ def get_DC(SR,GT,threshold=0.5):
     return DC
 
 
+def dice_loss(pred,target):
+    pred = pred.view(32, -1)
+    target = target.view(32, -1)
+    numerator = 2 * torch.sum(pred * target)
+    denominator = torch.sum(pred + target)
+    return 1 - (numerator + 1) / (denominator + 1)
+
+
 
