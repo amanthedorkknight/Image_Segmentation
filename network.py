@@ -310,12 +310,18 @@ class AttU_Net(nn.Module):
         self.Conv3 = conv_block(ch_in=128,ch_out=256)
         self.Conv4 = conv_block(ch_in=256,ch_out=512)
         self.Conv5 = conv_block(ch_in=512,ch_out=1024)
+        self.Conv6 = conv_block(ch_in=1024,ch_out=2048)
         
         self.DownConv1 = down_conv(ch_in=64, ch_out=64)
         self.DownConv2 = down_conv(ch_in=128, ch_out=128)
         self.DownConv3 = down_conv(ch_in=256, ch_out=256)
         self.DownConv4 = down_conv(ch_in=512, ch_out=512)
+        self.DownConv5 = down_conv(ch_in=1024, ch_out=1024)
 
+        self.Up6 = up_conv(ch_in=2048,ch_out=1024)
+        self.Att6 = Attention_block(F_g=1024,F_l=1024,F_int=512)
+        self.Up_conv6 = conv_block(ch_in=2048, ch_out=1024)
+        
         self.Up5 = up_conv(ch_in=1024,ch_out=512)
         self.Att5 = Attention_block(F_g=512,F_l=512,F_int=256)
         self.Up_conv5 = conv_block(ch_in=1024, ch_out=512)
@@ -350,9 +356,17 @@ class AttU_Net(nn.Module):
 
         x5 = self.DownConv4(x4)
         x5 = self.Conv5(x5)
+        
+        x6 = self.DownConv5(x5)
+        x6 = self.Conv6(x6)
 
         # decoding + concat path
-        d5 = self.Up5(x5)
+        d6 = self.Up6(x6)
+        x5 = self.Att6(g=d6, x=x5)
+        d6 = torch.cat((x5,d6),dim=1)
+        d6 = self.Up_conv6(d6)
+        
+        d5 = self.Up5(d6)
         x4 = self.Att5(g=d5,x=x4)
         d5 = torch.cat((x4,d5),dim=1)        
         d5 = self.Up_conv5(d5)

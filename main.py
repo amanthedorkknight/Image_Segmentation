@@ -69,9 +69,9 @@ config = {
     'num_epochs': 400,
     'num_epochs_decay': 70,
     'decay_ratio': 0.2,
-    'batch_size': 4,
+    'batch_size': 1,
     'num_workers': 8,
-    'lr': 0.0001,
+    'lr': 0.00001,
     'beta1': 0.5,        # momentum1 in Adam
     'beta2': 0.999,      # momentum2 in Adam    
     'augmentation_prob': 0,
@@ -93,3 +93,5 @@ config = {
 }
 config = Arguments(config)
 main(config)
+# -
+

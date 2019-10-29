@@ -38,7 +38,6 @@ class Solver(object):
         self.img_ch = config.img_ch
         self.output_ch = config.output_ch
         self.bce_loss = torch.nn.BCELoss()
-        self.dice_loss = dice_loss()
         self.augmentation_prob = config.augmentation_prob
 
         # Hyper-parameters
@@ -99,6 +98,13 @@ class Solver(object):
         print(model)
         print(name)
         print("The number of parameters: {}".format(num_params))
+        
+    def dice_loss(self, pred, target):
+        pred = pred.view(32, -1)
+        target = target.view(32, -1)
+        numerator = 2 * torch.sum(pred * target)
+        denominator = torch.sum(pred + target)
+        return 1 - (numerator + 1) / (denominator + 1)
 
     def train(self):
         
